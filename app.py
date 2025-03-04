@@ -3,32 +3,46 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from llm.huggingface import get_huggingface_embedding, get_huggingface_llm
 from dotenv import load_dotenv
-from database.chromadb import get_chroma_client
-from database.mongodb import get_mongodb_client
+from database.chromadb import get_chroma_client, ChromaDBClient
+from database.mongodb import get_mongodb_client, MongoDBClient
 import os
 from agents import router as agents_router
 from database import router as database_router
-
-load_dotenv()
+import logging
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # initialization
-    # client = get_chroma_client()
     # hugginface model init
+    load_dotenv()
     get_huggingface_embedding()
     if os.getenv("USE_LOCAL_LLM") == "true":
         get_huggingface_llm()
+    # initialize database clients
+    await get_chroma_client().ensure_connection()
+    await get_mongodb_client().ensure_connection()
     yield
     # shutdown
+    embedding = get_huggingface_embedding()
+    if hasattr(embedding, "cleanup"):
+        logging.info(embedding.cleanup())
     get_huggingface_embedding.cache_clear()
+
     if os.getenv("USE_LOCAL_LLM") == "true":
+        llm = get_huggingface_llm()
+        if hasattr(llm, "cleanup"):
+            logging.info(llm.cleanup())
         get_huggingface_llm.cache_clear()
 
     await get_chroma_client().close()
     await get_mongodb_client().close()
-    get_chroma_client.cache_clear()
-    get_mongodb_client.cache_clear()
+
+    ChromaDBClient.reset_instance()
+    MongoDBClient.reset_instance()
+    
+    # manually trigger garbage collection
+    import gc
+    gc.collect()
 
 app = FastAPI(
     title="DegreeMapper AI API",
