@@ -6,6 +6,8 @@ from dotenv import load_dotenv
 from database.chromadb import get_chroma_client
 from database.mongodb import get_mongodb_client
 import os
+from agents import router as agents_router
+from database import router as database_router
 
 load_dotenv()
 
@@ -42,6 +44,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(agents_router)
+app.include_router(database_router)
 
 @app.get("/")
 async def root():
