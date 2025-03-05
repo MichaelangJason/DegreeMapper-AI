@@ -5,7 +5,7 @@ from pymongo import AsyncMongoClient, MongoClient
 from typing import Dict, Optional
 from database.enums import MongoCollection
 from database.chromadb import get_huggingface_embedding
-from .types import Course
+from .types import Course, Program
 import os
 
 load_dotenv()
@@ -150,7 +150,14 @@ class MongoDBClient:
                 })
                 for doc in results
             ]
-
+        elif collection_name == MongoCollection.Program:
+            results = [
+                Program(**{
+                    **doc.metadata,
+                    "overview": doc.page_content
+                })
+                for doc in results
+            ]
         return results
     
     async def query(self,

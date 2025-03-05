@@ -31,4 +31,14 @@ class Course(BaseModel):
 
     class Config:
         from_attributes = True  # For ORM compatibility
+
+class Program(BaseModel):
+    url: str
+    degree: str
+    name: str
+    level: str
+    faculty: str
+    department: str
+    overview: str
+    sections: Dict[str, str | List[str]]
   

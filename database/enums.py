@@ -9,7 +9,7 @@ class MongoCollection(Enum):
     ChatHistory = "chat_history"
     Course = "courses_2024_2025"
     Faculty = "faculty"
-    Program = "program"
+    Program = "programs_2024_2025"
 
 class MongoVectorIndex(Enum):
     Course = "vector_index"

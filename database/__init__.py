@@ -9,8 +9,8 @@ async def ping_mongodb():
     client = get_mongodb_client()
     return await client.ensure_connection()
 
-@router.get("/similarity/mongodb")
-async def similarity_mongodb(query: str, n_results: int = 10):
+@router.get("/similarity/mongodb/courses")
+async def similarity_mongodb_courses(query: str, n_results: int = 10):
     client = get_mongodb_client()
     return await client.asimilarify_search(MongoCollection.Course, query, n_results)
 
@@ -18,6 +18,11 @@ async def similarity_mongodb(query: str, n_results: int = 10):
 async def query_mongodb(query: str, n_results: int = 10):
     client = get_mongodb_client()
     return await client.query(MongoCollection.Course, query, n_results)
+
+@router.get("/similarity/mongodb/programs")
+async def similarity_mongodb_programs(query: str, n_results: int = 10):
+    client = get_mongodb_client()
+    return await client.asimilarify_search(MongoCollection.Program, query, n_results)
 
 @router.get("/ping/chroma")
 async def ping_chroma():

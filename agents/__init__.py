@@ -25,7 +25,7 @@ async def chat_websocket(*, websocket: WebSocket, thread_id: str):
     try:
         await websocket.accept()
         agent = await get_agent()
-        config = {"configurable": {"thread_id": "thread_" + thread_id}}
+        config = {"configurable": {"thread_id": "thread_" + thread_id}, "recursion_limit": 10}
         info_logger.info(config)
         
         while True:
