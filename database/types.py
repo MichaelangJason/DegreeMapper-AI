@@ -1,19 +1,20 @@
-from pydantic import BaseModel
+from pydantic import BaseModel # not serializable?
 from typing import List, Optional, Dict
+from typing_extensions import TypedDict
 
-class Prerequisites(BaseModel):
+class Prerequisites(TypedDict, total=False):
     raw: str
     parsed: str
 
-class Corequisites(BaseModel):
+class Corequisites(TypedDict, total=False):
     raw: str
     parsed: str
 
-class Restrictions(BaseModel):
+class Restrictions(TypedDict, total=False):
     raw: str
     parsed: str  # restricted taken or taking courses
 
-class Course(BaseModel):
+class Course(TypedDict, total=False):
     id: str
     name: str
     credits: float  # Using float since it's a number in TypeScript
@@ -32,7 +33,7 @@ class Course(BaseModel):
     class Config:
         from_attributes = True  # For ORM compatibility
 
-class Program(BaseModel):
+class Program(TypedDict, total=False):
     url: str
     degree: str
     name: str

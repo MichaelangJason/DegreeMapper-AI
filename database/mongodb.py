@@ -7,9 +7,11 @@ from database.enums import MongoCollection
 from database.chromadb import get_huggingface_embedding
 from .types import Course, Program
 import os
+import logging
 
 load_dotenv()
 
+info_logger = logging.getLogger("uvicorn.info")
 
 class MongoDBClient:
     _instance: Optional["MongoDBClient"] = None
@@ -139,7 +141,16 @@ class MongoDBClient:
         # Use the synchronous version since the async version has issues
         results =await store.asimilarity_search(
             query=query,
-            k=n_results
+            k=n_results,
+            kwargs={
+                "$project": {
+                    "_id": 0,
+                    "embeddings": 0,
+                    "__v": 0,
+                    "createdAt": 0,
+                    "updatedAt": 0
+                }
+            }
         )
         # cast to Course object, should support other collections as well
         if collection_name == MongoCollection.Course:
@@ -158,6 +169,8 @@ class MongoDBClient:
                 })
                 for doc in results
             ]
+        
+        # info_logger.info(f"results: {results}")
         return results
     
     async def query(self,
