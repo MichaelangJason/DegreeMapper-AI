@@ -14,7 +14,7 @@ def get_openai_llm(model: str = "gpt-4o"):
 
   return ChatOpenAI(
       model=model,
-      temperature=0,
+      temperature=0, # should all based on the knowledge base
       max_tokens=None,
       timeout=None,
       max_retries=2,

@@ -1,9 +1,8 @@
 from fastapi import APIRouter, WebSocket
-from agents.lg_react import get_agent
+from agents.openai_react import get_agent
 from langchain_core.messages import HumanMessage
 import logging
 from websockets.exceptions import ConnectionClosed
-import json
 
 info_logger = logging.getLogger("uvicorn.info")
 error_logger = logging.getLogger("uvicorn.error")

@@ -9,6 +9,8 @@ import os
 from agents import router as agents_router
 from database import router as database_router
 import logging
+from agents.common import get_compiled_graph
+from agents.enums import Model
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -21,6 +23,7 @@ async def lifespan(app: FastAPI):
     # initialize database clients
     await get_chroma_client().ensure_connection()
     await get_mongodb_client().ensure_connection()
+    await get_compiled_graph(Model.OPENAI)
     yield
     # shutdown
     embedding = get_huggingface_embedding()
