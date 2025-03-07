@@ -1,4 +1,3 @@
-from pydantic import BaseModel
 from typing import Annotated, List, Dict, Any, Optional, Callable, TypedDict
 from langgraph.graph.message import add_messages, Messages
 from langchain_core.prompts import ChatPromptTemplate
@@ -6,8 +5,7 @@ from langchain_core.prompts.chat import MessagesPlaceholder # https://python.lan
 from langchain_core.messages import SystemMessage, ToolMessage
 from langchain_core.language_models import BaseChatModel
 from tools import tools
-# from langgraph.prebuilt import ToolNode
-from functools import lru_cache, partial
+from functools import partial
 import json
 from llm.openai import get_openai_llm
 from langgraph.graph.graph import CompiledGraph
@@ -17,9 +15,6 @@ from database.mongodb import get_mongodb_client
 from langgraph.checkpoint.mongodb.aio import AsyncMongoDBSaver
 from async_lru import alru_cache
 import logging
-from langchain_core.utils.function_calling import convert_to_openai_tool
-# from langchain_core.messages.tool import ToolCall # ToolCall fromat
-
 
 info_logger = logging.getLogger("uvicorn.info")
 
@@ -33,15 +28,8 @@ class UserInfo(TypedDict, total=False):
     dislikes: Annotated[Optional[List[str]], "The dislikes of the user"]
     notes: Annotated[Optional[List[str]], "The notes of the user"]
 
-# class ToolCall(TypedDict):
-#     name: str
-#     args: dict[str, Any]
-#     id: Optional[str]
-
-# class InfoUpdaterWithTools(TypedDict, total=False):
-#     user_info: UserInfo
-#     tool_calls: List[ToolCall]
-    
+class Term(TypedDict):
+    pass
 
 def user_preference_reducer(prev: UserInfo, update: UserInfo) -> UserInfo:
     if prev is None or prev == {}:
@@ -52,37 +40,26 @@ def user_preference_reducer(prev: UserInfo, update: UserInfo) -> UserInfo:
     update = {k: v for k, v in update.items() if v is not None}
     return {**prev, **update} # merge the two dictionaries
 
-class AgentState(TypedDict, total=False):
+class OverallState(TypedDict, total=False):
     # can defined by inheriting from MessagesState of langgraph.graph, https://langchain-ai.github.io/langgraph/concepts/low_level/#messagesstate
     messages: Annotated[List[Messages], add_messages(format="langchain-openai")] 
     # should store information about user's program, degree, interests, etc., 
     # should be updated as the agent interacts with the user. Pass {} at the beginning
     # not persistent across sessions for now, unlike ChatGPT's memory.
     user_info: Annotated[UserInfo, user_preference_reducer]
+    # current user plan from frontend
+    user_plan: List[Term]
 
 
 # first node in the graph
-async def info_updater(state: AgentState, get_llm: Callable[..., BaseChatModel], llm_config: Dict[str, Any]) -> AgentState:
+async def info_updater(state: OverallState, get_llm: Callable[..., BaseChatModel], llm_config: Dict[str, Any]) -> OverallState:
     """
     this function ask the llm to extract the possible information from the user's message before answering.
     this can return none if the user's message is not related to any fields expected in the user_info.
     """
 
     # the JSON output here can also be done with the method mentioned here: https://github.com/langchain-ai/langchainjs/issues/4555
-    # llm = get_llm(**llm_config).with_structured_output(UserInfo) # use a smaller model for this task
     llm = get_llm(**llm_config).with_structured_output(UserInfo)
-
-
-    # llm = llm.bind_tools(tools=[InfoUpdaterWithTools] + tools, 
-    #                      tool_choice="any", 
-    #                      parallel_tool_calls=False, 
-    #                      strict=True,
-    #                      structured_output_format={
-    #                          "kwargs": {"method": "function_calling"},
-    #                          "schema": InfoUpdaterWithTools
-    #                      }
-    #                      )
-    
 
     if not "messages" in state \
         or not isinstance(state["messages"], List) \
@@ -122,8 +99,8 @@ async def info_updater(state: AgentState, get_llm: Callable[..., BaseChatModel],
     return { "user_info": result }
     
 
-# second node in the graph
-async def chatbot(state: AgentState, get_llm: Callable[..., BaseChatModel], llm_config: Dict[str, Any]) -> Dict[str, List[str]]:
+# for now it only answers questions, not helping with Recommendation and Frontend Interaction.
+async def chatbot(state: OverallState, get_llm: Callable[..., BaseChatModel], llm_config: Dict[str, Any]) -> Dict[str, List[str]]:
     """
     this function should take in the state and return a message to be added to the conversation history.
     """
@@ -181,7 +158,7 @@ class BasicToolNode:
 
 # definition from LangGraph's example
 def route_tools(
-    state: AgentState,
+    state: OverallState,
     tool_node_name: str = "tools_chatbot",
     end_node_name: str = END
 ):
@@ -212,21 +189,19 @@ async def get_compiled_graph(model: Model) -> CompiledGraph:
         get_llm = get_openai_llm
     # elif model == Model.HUGGINGFACE:  # TODO: add local huggingface model support
     #     llm = get_huggingface_llm()
-        chatbot_config = {"model": "gpt-4o"}
-        info_updater_config = {"model": "gpt-4o-mini"}
+        chatbot_config = {"model": "gpt-4o", "tag": "chatbot"}
+        info_updater_config = {"model": "gpt-4o-mini", "tag": "info_updater"}
     else:
         raise ValueError(f"Invalid model: {model}")
     
-    graph = StateGraph(AgentState)
+    graph = StateGraph(OverallState)
     graph.add_node("info_updater", partial(info_updater, get_llm=get_llm, llm_config=info_updater_config))
     graph.add_node("chatbot", partial(chatbot, get_llm=get_llm, llm_config=chatbot_config))
     graph.add_node("tools_chatbot", BasicToolNode(tools)) # can also be replaced with ToolNode from langgraph.prebuilt
-    # graph.add_node("tools_info_updater", BasicToolNode(tools))
 
     graph.add_edge(START, "info_updater")
     graph.add_edge("info_updater", "chatbot")
     graph.add_edge("tools_chatbot", "chatbot")
-    # graph.add_edge("tools_info_updater", "info_updater")
     graph.add_conditional_edges(
         "chatbot",
         route_tools, # can also be replaced with tools_condition from langgraph.prebuilt
@@ -235,14 +210,6 @@ async def get_compiled_graph(model: Model) -> CompiledGraph:
             END: END
         }
     )
-    # graph.add_conditional_edges(
-    #     "info_updater",
-    #     partial(route_tools, tool_node_name="tools_info_updater", end_node_name="chatbot"),
-    #     {
-    #         "tools_info_updater": "tools_info_updater",
-    #         "chatbot": "chatbot"
-    #     }
-    # )
 
     checkpointer = await get_async_mongo_checkpointer()
     compiled_graph = graph.compile(checkpointer=checkpointer, debug=True)

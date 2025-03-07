@@ -19,19 +19,18 @@ async def get_course_info(
 ) -> Course:
     client = get_mongodb_client()
 
-    course_id = course_id[:10]
+    course_id = course_id[:10] # format the course id to 10 characters max.
     info_logger.info(f"Searching for course with id: {course_id}, n_results: {n_results}")
-
     
-    result = await client.query(
+    result = await client.query( # TODO: Add bulk query
         collection_name=MongoCollection.Course,
         query=course_id,
         n_results=n_results
     )
     
-    if not result:
-        raise ValueError(f"Course {course_id} not found")
-    
+    # if not result:
+    #     raise ValueError(f"Course {course_id} not found")
+    info_logger.info(f"Found {len(result)} courses for {course_id}")
     return result
 
 @tool(description="Search for courses by semantic similarity on the course overview, not the course id, name, faculty, department, etc.")
@@ -49,9 +48,9 @@ async def semantic_course_search(
         n_results=n_results
     )
 
-    if not result:
-        raise ValueError(f"No relevant courses found for {query}")
-    
+    # if not result:
+    #     raise ValueError(f"No relevant courses found for {query}")
+    info_logger.info(f"Found {len(result)} courses for {query}")
     return result
 
 @tool(description="Search for programs by semantic similarity on the program overview, not the program id, name, faculty, department, etc.")
@@ -69,8 +68,8 @@ async def semantic_program_search(
         n_results=n_results
     )
 
-    if not result:
-        raise ValueError(f"No relevant programs found for {query}")
+    # if not result:
+    #     raise ValueError(f"No relevant programs found for {query}")
     
     info_logger.info(f"Found {len(result)} programs for {query}")
     return result

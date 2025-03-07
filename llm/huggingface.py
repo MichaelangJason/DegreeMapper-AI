@@ -1,10 +1,9 @@
 from langchain_huggingface import HuggingFaceEmbeddings, ChatHuggingFace, HuggingFacePipeline
 from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig, TextStreamer, pipeline
-from llm.enums import HF_LLM
+from llm.enums import HF_LLM, HF_EMBEDDING
 import os
 from functools import lru_cache
 import logging
-import uvicorn
 
 info_logger = logging.getLogger("uvicorn.info")
 error_logger = logging.getLogger("uvicorn.error")
@@ -84,8 +83,8 @@ def _cleanup_embedding_model(self: HuggingFaceEmbeddings):
         error_logger.error(f"Error during HuggingFaceEmbeddings cleanup: {e}")
         return False
 
-@lru_cache(maxsize=1)
-def get_huggingface_embedding():
+@lru_cache(maxsize=2)
+def get_huggingface_embedding(model: HF_EMBEDDING = HF_EMBEDDING.BGE):
     """Get singleton instance of HuggingFace embedding model"""
     device = os.getenv("EMBEDDING_DEVICE") or "cpu"
     model = os.getenv("EMBEDDING_MODEL") or "BAAI/bge-m3"
