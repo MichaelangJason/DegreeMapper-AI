@@ -74,7 +74,7 @@ async def semantic_program_search(
     info_logger.info(f"Found {len(result)} programs for {query}")
     return result
 
-@tool(description="get_knowledge_by_faculty")
+@tool(description="Get general knowledges about McGill University and its faculties, departments, programs, courses, etc.")
 async def get_knowledge_by_faculty(
     # faculty: Annotated[ChromaCollection, "The faculty to search for, should be a ChromaCollection"], 
     query: Annotated[str, "The query to search for, should be a string"],
