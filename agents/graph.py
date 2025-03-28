@@ -2,11 +2,11 @@ from langgraph.graph.graph import CompiledGraph
 from langgraph.graph import StateGraph, START, END
 from langgraph.checkpoint.mongodb.aio import AsyncMongoDBSaver
 from database.mongodb import get_mongodb_client
-from llm.openai import get_openai_llm
+from llm import get_deepseek_llm, get_openai_llm
 from async_lru import alru_cache
 from .enums import Model, Node
 from .types import OverallState
-from .nodes import ToolExecutionHandler, InteractiveQuery, ContextManager, PersonaResponder
+from .nodes import *
 from .tools import tools
 import logging
 
@@ -18,13 +18,13 @@ async def get_compiled_graph(model: Model) -> CompiledGraph:
         get_llm = get_openai_llm
 
         ctxmanager_config = { "model": "gpt-4o-mini", "tag": Node.CONTEXT_MANAGER.value}
-        persona_responder_config = { "model": "gpt-4o", "tag": Node.PERSONA_RESPONDER.value }
+        persona_responder_config = { "model": "gpt-4o-mini", "tag": Node.PERSONA_RESPONDER.value }
 
     elif model == Model.DEEPSEEK:
-        get_llm = get_openai_llm
+        get_llm = get_deepseek_llm
         
-        ctxmanager_config = { "model": "gpt-4o-mini", "tag": Node.CONTEXT_MANAGER.value}
-        persona_responder_config = { "model": "gpt-4o", "tag": Node.PERSONA_RESPONDER.value }
+        ctxmanager_config = { "model": "deepseek-reasoner", "tag": Node.CONTEXT_MANAGER.value}
+        persona_responder_config = { "model": "deepseek-reasoner", "tag": Node.PERSONA_RESPONDER.value }
     # elif model == Model.HUGGINGFACE:  # TODO: add local huggingface model support
     #     llm = get_huggingface_llm()
     else:
