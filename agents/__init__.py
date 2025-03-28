@@ -37,7 +37,7 @@ async def handle_chat(request: Request):
         )
         async for msg, metadata in results:
             if msg.content and "chatbot" in metadata.get("tags", []):
-                yield f"event: message\ndata: {json.dumps({'message': msg.content, 'metadata': {"thread_id": metadata.get("thread_id", thread_id) }})}\n\n"
+                yield f"event: message\ndata: {json.dumps({'content': msg.content, 'metadata': {"thread_id": metadata.get("thread_id", thread_id) }})}\n\n"
 
     return StreamingResponse(stream_response(), media_type="text/event-stream")
 
