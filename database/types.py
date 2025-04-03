@@ -1,6 +1,7 @@
 from pydantic import BaseModel # not serializable?
 from typing import List, Optional, Dict
 from typing_extensions import TypedDict
+from .enums import Level, Faculty, Degree, Department
 
 class Prerequisites(TypedDict, total=False):
     raw: str
@@ -43,3 +44,13 @@ class Program(TypedDict, total=False):
     overview: str
     sections: Dict[str, str | List[str]]
   
+class Filter(TypedDict, total=False):
+    n_results: int
+    full_detail: bool
+    level: Level
+    faculty: Faculty
+    department: Department
+    degree: Degree
+
+class CourseFilter(Filter):
+    n_credits: int

@@ -2,12 +2,14 @@ from langchain_mongodb import MongoDBAtlasVectorSearch
 from dotenv import load_dotenv
 from functools import lru_cache
 from pymongo import AsyncMongoClient, MongoClient
-from typing import Dict, Optional
-from database.enums import MongoCollection
-from database.chromadb import get_huggingface_embedding
-from .types import Course, Program
+from typing import Dict, Optional, Any
+from llm.huggingface import get_huggingface_embedding, generate_bson_vector
+from .enums import MongoCollection, MongoIndex
+from .types import Course
+from .utils import SEARCH_WEIGHTS, RECIPROCAL_C, generate_vector_search_filter, generate_search_filter, generate_search_stage
 import os
 import logging
+from warnings import deprecated
 
 load_dotenv()
 
@@ -16,6 +18,7 @@ info_logger = logging.getLogger("uvicorn.info")
 class MongoDBClient:
     _instance: Optional["MongoDBClient"] = None
     _initialized: bool = False
+    _search_weights = SEARCH_WEIGHTS
     
     @classmethod
     def get_instance(cls, uri: str = None, database_name: str = None):
@@ -60,6 +63,7 @@ class MongoDBClient:
         self._async_client: AsyncMongoClient = None # for query with atlas search
         self._stores: Dict[str, MongoDBAtlasVectorSearch] = {}
         self.__class__._initialized = True
+        self.__class__._search_weights = SEARCH_WEIGHTS
 
     def get_client(self):
         """Get or create MongoClient"""
@@ -78,31 +82,7 @@ class MongoDBClient:
             await self._async_client.admin.command('ping')
             # print("Async client created")
         return self._async_client
-    
-    async def get_store(self, collection: MongoCollection) -> MongoDBAtlasVectorSearch:
-        """Get or create vector store for specific collection"""
-        collection_key = collection.value
-        
-        ef = get_huggingface_embedding()
-        await self.ensure_connection()
-        
-        if collection_key not in self._stores:
-            # print("Collection not found, creating new collection")
-            client = self.get_client()
-            db = client[self.database_name]
-            collection = db[collection_key]
 
-            self._stores[collection_key] = MongoDBAtlasVectorSearch(
-                collection=collection,
-                index_name="vector_index",
-                text_key="overview", # TODO: should also apply to other collections
-                embedding_key="embeddings",
-                embedding=ef,
-                relevance_score_fn="dotProduct"
-            )
-            # print("Store created")
-        
-        return self._stores[collection_key]
 
     async def ensure_connection(self, async_client: bool = False) -> bool:
         """Check connection health and reinitialize if needed"""
@@ -129,61 +109,19 @@ class MongoDBClient:
                 self.get_client()
             
             return False
-
-    async def asimilarify_search(self, 
-            collection_name: MongoCollection, 
-            query: str, 
-            n_results: int = 10):
-        """Search for similar documents"""
-        await self.ensure_connection()
-        store = await self.get_store(collection_name)
-        # print("start search")
-        # Use the synchronous version since the async version has issues
-        results =await store.asimilarity_search(
-            query=query,
-            k=n_results,
-            kwargs={
-                "$project": {
-                    "_id": 0,
-                    "embeddings": 0,
-                    "__v": 0,
-                    "createdAt": 0,
-                    "updatedAt": 0
-                }
-            }
-        )
-        # cast to Course object, should support other collections as well
-        if collection_name == MongoCollection.Course:
-            results = [
-                Course(**{
-                    **doc.metadata,
-                    "overview": doc.page_content
-                })
-                for doc in results
-            ]
-        elif collection_name == MongoCollection.Program:
-            results = [
-                Program(**{
-                    **doc.metadata,
-                    "overview": doc.page_content
-                })
-                for doc in results
-            ]
-        
-        # info_logger.info(f"results: {results}")
-        return results
     
+    @deprecated("Will be moved hybrid search for all")
     async def query(self,
-            collection_name: MongoCollection,
+            collection: MongoCollection,
             query: str,
             n_results: int = 10):
         """Search for documents"""
         await self.ensure_connection(async_client=True)
 
-        # use async client to query
+        # use async client to query, get corresponding collection
         client = await self.get_async_client()
         db = client[self.database_name]
-        collection = db[collection_name.value]
+        collection = db[collection.value]
         
         # mongo atlas aggregation pipeline
         results = await collection.aggregate([
@@ -215,13 +153,195 @@ class MongoDBClient:
         # print(results)
         return [Course(**result) for result in results]
 
-    async def insert_documents(self, 
-            collection_name: MongoCollection, 
-            documents: list[dict]):
-        """Insert new documents"""
-        await self.ensure_connection()
-        store = await self.get_store(collection_name)
-        return await store.aadd_documents(documents)
+    async def hybrid_search(
+            self,
+            query: str,
+            collection: MongoCollection,
+            n_results = 3,
+            *,
+            filter: Dict[str, Any] = {}, # use to filter out documents by criteria
+            proj: Dict[str, Any] = {}, # use to keep wanted fields
+        ):
+        await self.ensure_connection(async_client=True)
+
+        client = await self.get_async_client()
+        db = client[self.database_name]
+        coll = db[collection.value]
+
+        ef = get_huggingface_embedding()
+        embeddings = await ef.aembed_query(query)
+        embeddings = generate_bson_vector(embeddings)
+        vector_weight = self._search_weights[collection][MongoIndex.VECTOR]
+        full_text_weight = self._search_weights[collection][MongoIndex.FULL_TEXT]
+
+        vector_pipeline = [
+            # 1. vector search
+            {
+                "$vectorSearch": {
+                    "index": "vector_index",
+                    "path": "embeddings",
+                    "queryVector": embeddings,
+                    "numCandidates": 100,
+                    "limit": 20,
+                    "filter": generate_vector_search_filter(filter) # can be empty dict
+                }
+            },
+            # add vectorScore
+            {
+                "$addFields": {
+                    "vector_search_score": { "$meta": "vectorSearchScore" }
+                }
+            },
+            # group into one doc with docs fields for ranks
+            {
+                "$group": {
+                    "_id": None,
+                    "docs": {"$push": "$$ROOT"}
+                }
+            },
+            # unwind to get the rank of the document
+            {
+                "$unwind": {
+                    "path": "$docs",
+                    "includeArrayIndex": "rank"
+                }
+            },
+            # compute verctor search score with reciprocal rank
+            {
+                "$addFields": {
+                    "vs_score": { "$multiply": [ vector_weight, { "$divide": [ "$docs.vector_search_score", { "$add": [ "$rank", RECIPROCAL_C ]}]}]}
+                }
+            },
+            # replace by original id id
+            {
+                "$set": {
+                    "_id": "$docs._id" 
+                }
+            }
+        ]
+        
+
+        # 2. full text search
+        full_text_pipeline = [
+            # $search stage, supports text
+            {   
+                "$search": {
+                    "index": "full_text_index",
+                    "compound": {
+                        "should": generate_search_stage(query, collection=collection),
+                        "filter": generate_search_filter(filter)
+                    }
+                }
+            },
+            # limit to 20 results
+            {
+                "$limit": 20
+            },
+            # add search score
+            {
+                "$addFields": {
+                    "search_score": { "$meta": "searchScore" },
+                }
+            },
+            # push
+            {
+                "$group": {
+                    "_id": None,
+                    "docs": {"$push": "$$ROOT"}
+                }
+            },
+            # add rank field
+            {
+                "$unwind": {
+                    "path": "$docs", 
+                    "includeArrayIndex": "rank"
+                }
+            },
+            # compute full text search score
+            {
+                "$addFields": {
+                    "fts_score": { "$multiply": [ full_text_weight, { "$divide": [ "$docs.search_score", { "$add": [ "$rank", RECIPROCAL_C ]}]}]}
+                }
+            },
+            # replace _id by original one
+            {
+                "$set": {
+                    "_id": "$docs._id"
+                }
+            }
+        ]
+
+        # union, unpack the values and apply any projection
+        pipeline = [
+            # vector search results
+            *vector_pipeline,
+            # union with full text search
+            {
+                "$unionWith": {
+                    "coll": collection.value,
+                    "pipeline": full_text_pipeline
+                }
+            },
+            # group 2 results
+            {
+                "$group": {
+                    "_id": "$_id",
+                    "docs": {"$first": "$docs"},
+                    "vs_score": {"$max": "$vs_score"},
+                    "fts_score": {"$max": "$fts_score"},
+                    "vector_search_score": { "$max": "$docs.vector_search_score" },
+                    "search_score": { "$max": "$docs.search_score" }
+                }
+            },
+            # filter out null one
+            {
+                "$set": {
+                    "vs_score": {"$ifNull": ["$vs_score", 0]},
+                    "fts_score": {"$ifNull": ["$fts_score", 0]},
+                    "vector_search_score": {"$ifNull": ["$vector_search_score", 0]},
+                    "search_score": {"$ifNull": ["$search_score", 0]}
+                }
+            },
+            # compute score
+            {
+                "$addFields": {
+                    "score": { "$add": ["$vs_score", "$fts_score"] }
+                }
+            },
+            # sort
+            {
+                "$sort": { "score": -1 }
+            },
+            # limit to n_results
+            {
+                "$limit": n_results
+            },
+            # extract other fields to result document
+            {
+                "$replaceRoot": {
+                    "newRoot": {
+                        "$mergeObjects": ["$$ROOT", "$docs"]
+                    }
+                }
+            },
+            {
+                "$project": {
+                    "_id": 0,
+                    "embeddings": 0,
+                    "docs": 0,
+                    "createdAt": 0,
+                    "updatedAt": 0,
+                    "__v": 0
+                }
+            }
+        ]
+
+        if (proj): pipeline.append({ "$project": proj })
+
+        response = await coll.aggregate(pipeline=pipeline)
+        results = await response.to_list()
+        
+        return results
 
     async def close(self):
         """Clean up resources"""

@@ -2,14 +2,13 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
-from database.chromadb import get_chroma_client, ChromaDBClient
-from database.mongodb import get_mongodb_client, MongoDBClient
-from agents import router as agents_router
-from database import router as database_router
 from llm.huggingface import get_huggingface_embedding, get_huggingface_llm
+from database.mongodb import get_mongodb_client, MongoDBClient
 from agents.graph import get_compiled_graph
 from agents.enums import Model
 import logging
+from database import router as database_router
+from agents import router as agents_router
 import os
 
 @asynccontextmanager
@@ -21,7 +20,7 @@ async def lifespan(app: FastAPI):
     if os.getenv("USE_LOCAL_LLM") == "true":
         get_huggingface_llm()
     # initialize database clients
-    await get_chroma_client().ensure_connection()
+    # await get_chroma_client().ensure_connection()
     await get_mongodb_client().ensure_connection()
     await get_compiled_graph(Model.OPENAI)
     yield
@@ -37,10 +36,10 @@ async def lifespan(app: FastAPI):
             logging.info(llm.cleanup())
         get_huggingface_llm.cache_clear()
 
-    await get_chroma_client().close()
+    # await get_chroma_client().close()
     await get_mongodb_client().close()
 
-    ChromaDBClient.reset_instance()
+    # ChromaDBClient.reset_instance()
     MongoDBClient.reset_instance()
     
     # manually trigger garbage collection

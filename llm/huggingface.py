@@ -4,6 +4,7 @@ from llm.enums import HF_LLM, HF_EMBEDDING
 import os
 from functools import lru_cache
 import logging
+from bson.binary import Binary, BinaryVectorDtype
 
 info_logger = logging.getLogger("uvicorn.info")
 error_logger = logging.getLogger("uvicorn.error")
@@ -104,9 +105,11 @@ def get_huggingface_embedding(model: HF_EMBEDDING = HF_EMBEDDING.BGE):
     )
 
     # monkey patch the cleanup method to the HuggingFaceEmbeddings class
-    embedding.__class__.cleanup = _cleanup_embedding_model
+    # embedding.__class__.cleanup = _cleanup_embedding_model
     return embedding
 
+def generate_bson_vector(vector, vector_dtype=BinaryVectorDtype.FLOAT32):
+    return Binary.from_vector(vector, vector_dtype)
 
 @lru_cache(maxsize=1)
 def get_huggingface_llm():
