@@ -24,6 +24,7 @@ dependencies = [
     "numpy>=1.26.4",
     "pymongo>=4.11.1",
     "sentence-transformers>=3.4.1",
+    "sse-starlette>=2.2.1",
     "torch>=2.6.0",
     "transformers>=4.49.0",
     "uvicorn>=0.34.0",
