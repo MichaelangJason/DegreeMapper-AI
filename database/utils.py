@@ -24,7 +24,9 @@ def generate_vector_search_filter(
   for k, v in filters.items():
     if isinstance(v, list) and len(v) == 0:
       continue
-    if (k == "credits") and isinstance(v, float):
+    if (k == "course_level"):
+      pass
+    elif (k == "credits") and isinstance(v, float):
       filter.update({ k: { "$lte": v } })
     else:
       filter.update({ k: { "$in": v if isinstance(v, list) else [v] } })
@@ -47,17 +49,11 @@ def generate_search_filter(
   for k, v in filters.items():
     if isinstance(v, list) and len(v) == 0:
       continue
-    if (k == "credits") and isinstance(v, float):
+    elif (k == "credits") and isinstance(v, float):
       filter.append({ "range": { "path": k, "lte": v } })
     else:
       filter.append({ "in": { "path": k, "value": v if isinstance(v, list) else [v] } })
-
-  
-  # filter = [
-  #     { "in" if isinstance(v, list) else "equals": { "path": k, "value": v } } 
-  #     for k, v in filters.items()
-  # ]
-  # print(filter)
+      
   return filter
 
 def generate_search_stage(

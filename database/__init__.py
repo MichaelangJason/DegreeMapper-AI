@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 from .mongodb import  get_async_mongodb_client, MongoDBClient
-from .enums import MongoCollection, Department, Level
+from .enums import MongoCollection, Department, AcademicLevel
 from agents.tools import search_course, search_program, query_mcgill_knowledges
 from langchain_core.messages import ToolMessage
 
@@ -31,7 +31,7 @@ async def test_tool(tool_name: str, query: str, n_results: int = 3):
             "args": {
                 "query": query,
                 "department": [],
-                "level": Level.UGRAD,
+                "level": AcademicLevel.UGRAD,
                 "n_results": n_results
             },
             "id": 123,

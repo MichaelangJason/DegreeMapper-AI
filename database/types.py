@@ -1,7 +1,7 @@
 from pydantic import BaseModel # not serializable?
 from typing import List, Optional, Dict
 from typing_extensions import TypedDict
-from .enums import Level, Faculty, Degree, Department
+from .enums import AcademicLevel, Faculty, Degree, Department
 
 class Prerequisites(TypedDict, total=False):
     raw: str
@@ -21,7 +21,8 @@ class Course(TypedDict, total=False):
     credits: float  # Using float since it's a number in TypeScript
     faculty: str
     department: str
-    level: int
+    academicLevel: int
+    courseLevel: str
     terms: List[str]
     overview: Optional[str] = None
     instructors: Optional[str] = None

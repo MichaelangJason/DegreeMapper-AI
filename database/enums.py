@@ -10,10 +10,36 @@ class MongoIndex(Enum):
     FULL_TEXT = "full_text_index"
     VECTOR = "vector_index"
 
-class Level(Enum):
-    ALL = 0
-    UGRAD = 1
-    GRAD = 2
+class CourseLevel(Enum):
+    LEVEL_000 = "000"
+    LEVEL_100 = "100"
+    LEVEL_200 = "200"
+    LEVEL_300 = "300"
+    LEVEL_400 = "400"
+    LEVEL_500 = "500"
+    LEVEL_600 = "600"
+    LEVEL_700 = "700"
+    LEVEL_800 = "800"
+    LEVEL_A00 = "a00"
+    LEVEL_C00 = "c00"
+    LEVEL_D00 = "d00"
+    LEVEL_E00 = "e00"
+    LEVEL_G00 = "g00"
+    LEVEL_H00 = "h00"
+    LEVEL_J00 = "j00"
+    LEVEL_K00 = "k00"
+    LEVEL_L00 = "l00"
+    LEVEL_M00 = "m00"
+    LEVEL_N00 = "n00"
+    LEVEL_P00 = "p00"
+    LEVEL_S00 = "s00"
+    LEVEL_T00 = "t00"
+    LEVEL_W00 = "w00"
+
+class AcademicLevel(Enum):
+    ALL = "all"
+    UGRAD = "undergraduate"
+    GRAD = "graduate"
 
 class Degree(Enum):
     MASTER_OF_EDUCATION = "Master of Education"
