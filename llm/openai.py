@@ -14,13 +14,15 @@ def get_openai_llm(model: str = "gpt-4o", **kwargs):
   if API_KEY is None:
     raise ValueError("OPENAI_API_KEY is not set")
 
-  return ChatOpenAI(
-      model=model,
-      temperature=0, # should all based on the knowledge base
-      max_tokens=None,
-      timeout=None,
-      max_retries=2,
-      api_key=API_KEY,
-      **kwargs
-  )
+  config = {
+    "model": model,
+    "temperature": 0, # should all based on the knowledge base
+    "max_tokens": None,
+    "timeout": None,
+    "max_retries": 2,
+    "api_key": API_KEY,
+    **kwargs # overwrite any existing config
+  }
+
+  return ChatOpenAI(**config)
 

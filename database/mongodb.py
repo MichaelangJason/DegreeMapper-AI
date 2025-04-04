@@ -331,7 +331,12 @@ class MongoDBClient:
                     "docs": 0,
                     "createdAt": 0,
                     "updatedAt": 0,
-                    "__v": 0
+                    "__v": 0,
+                    "vs_score": 0,
+                    "fts_score": 0,
+                    "score": 0,
+                    "search_score": 0,
+                    "vector_search_score": 0
                 }
             }
         ]

@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 from .mongodb import  get_async_mongodb_client, MongoDBClient
 from .enums import MongoCollection, Department, Level
-from agents.tools import search_course, search_program, query_mcgill
+from agents.tools import search_course, search_program, query_mcgill_knowledges
 from langchain_core.messages import ToolMessage
 
 router = APIRouter()
@@ -37,8 +37,8 @@ async def test_tool(tool_name: str, query: str, n_results: int = 3):
             "id": 123,
             "type": "tool_call"
         })
-    elif tool_name == query_mcgill.name:
-        result: ToolMessage = await query_mcgill.ainvoke({
+    elif tool_name == query_mcgill_knowledges.name:
+        result: ToolMessage = await query_mcgill_knowledges.ainvoke({
             "name": tool_name,
             "args": {
                 "query": query,

@@ -1,43 +1,56 @@
-from langgraph.graph.message import add_messages, Messages
-from langchain_core.messages import ToolCall
-from typing import TypedDict, Annotated, Optional, List
-from .reducer import user_preference_reducer
+from typing import TypedDict, Annotated, Optional, List, Literal, Any, Dict, Tuple
+from database.enums import Level, Degree
+from typing_extensions import NotRequired
+try:
+    from pydantic import BaseModel, Field
+except ImportError:
+    # Define a placeholder if pydantic is not available
+    class BaseModel:
+        pass
+    def Field(*args, **kwargs):
+        return None
+
+
+CourseId = str
+Program = str
 
 class UserInfo(TypedDict, total=False):
     name: Annotated[Optional[str], "The name of the user"]
-    program: Annotated[Optional[str], "The program the user is interested in or is taking"]
-    degree: Annotated[Optional[str], "The degree the user is interested in or is pursuing"]
-    level: Annotated[Optional[str], "The level of the user, either undergraduate or graduate"]
-    courses_id_taken: Annotated[Optional[List[str]], "The courses the user has taken, represented by their ids"]
+    program: Annotated[Optional[Program], "The program the user is interested in or is taking"]
+    degree: Annotated[Optional[Degree], "The degree the user is interested in or is pursuing"]
+    level: Annotated[Optional[Level], "The level of the user, either undergraduate or graduate"]
+    courses_id_taken: Annotated[Optional[List[CourseId]], "The courses the user has taken, represented by their ids"]
     interests: Annotated[Optional[List[str]], "The interests of the user"]
     dislikes: Annotated[Optional[List[str]], "The dislikes of the user"]
     notes: Annotated[Optional[List[str]], "The notes of the user"]
 
 class Option(TypedDict):
     content: Annotated[str, "The content of the option"]
-    id: Annotated[str, "The id of the option"]
+    id: Annotated[str, "The id of the option, can be equal to content"]
 
 class Question(TypedDict):
     question: Annotated[str, "The question to be asked to the user"]
-    options: Annotated[Optional[List[Option]], "The options to be chosen from"]
+    options: Annotated[List[Option], "The options to be chosen from"]
 
-class Context(TypedDict):
-    id: Annotated[str, "The id of the context"]
-    content: Annotated[str, "The content of the context"]
+# class Context(TypedDict):
+#     id: Annotated[str, "The id of the context"]
+#     content: Annotated[Any, "The content of the context"]
 
-class ContextUpdate(Context):
-    op: Annotated[str, "The operation to be performed on the context"]
+ContextId = str
+class ContextDict(TypedDict):
+    type: Literal["user_info", "course", "program", "general"]
+    value: Any
+Context = Dict[ContextId, ContextDict]
+ContextUpdate = Dict[ContextId, Tuple[Any | None, Literal["update", "delete"]]]
 
-class OverallState(TypedDict, total=False):
-    messages: Annotated[List[Messages], add_messages(format="langchain-openai")]
-    user_info: Annotated[UserInfo, user_preference_reducer]
-    contexts: Annotated[List[Context], "The contexts of the user's input"]
-    tool_calls: Annotated[List[ToolCall], "The tool calls to be executed"]
-    # this controls whether we directly invoke the agent with the input or use a Command to resume from the interrupted state
-    interrupted: Annotated[bool, "Whether the agent is interrupted, waiting for user's input"]
+# TypedDict version of ContextUpdate with arbitrary string keys
+class ContextUpdateDict(TypedDict):
+    context_id: Annotated[ContextId, "the id of the context"]
+    new_value: Annotated[Any | None, "the value of the context, either None to delete or any json serializable"]
+    type: Literal["user_info", "course", "program", "general"]
+    op: Literal["update", "delete"]
 
-class ToolNodeOutput(TypedDict):
-    contexts: Annotated[List[ContextUpdate], "The tool results as contexts"]
-    user_info: Annotated[Optional[UserInfo], "intermediate user info"]
-    ask_user_call: Annotated[Optional[Question], "The question to be asked to the user"]
-    interrupted: Annotated[bool, "change the agent state if any ask user call"]
+class Term(TypedDict):
+    id: Annotated[str, "Term id provided from frontend"]
+    name: Annotated[str, "Term name provided from frontend"]
+    courses: Annotated[List[CourseId], "Term course id, must exists in database"]

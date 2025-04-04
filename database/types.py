@@ -43,14 +43,3 @@ class Program(TypedDict, total=False):
     department: str
     overview: str
     sections: Dict[str, str | List[str]]
-  
-class Filter(TypedDict, total=False):
-    n_results: int
-    full_detail: bool
-    level: Level
-    faculty: Faculty
-    department: Department
-    degree: Degree
-
-class CourseFilter(Filter):
-    n_credits: int
