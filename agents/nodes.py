@@ -1,17 +1,18 @@
 from typing import Dict, Any, Callable, Annotated, TypedDict, List, Optional
-from langchain_core.messages import HumanMessage, AIMessage, AIMessageChunk, ToolCall, ToolMessage, RemoveMessage
+from langchain_core.messages import HumanMessage, AIMessage, SystemMessage, ToolCall, ToolMessage, RemoveMessage
 from langchain_core.language_models import BaseChatModel
 from langchain_core.tools import BaseTool
 from langgraph.graph.message import add_messages, Messages
 from langgraph.graph import END
 from langgraph.types import interrupt, Command
-from .tools import ask_user, update_context, search_course, search_program, query_mcgill_knowledges
+from .tools import ask_user, update_context, search_course, search_program, query_mcgill_knowledges, generate_base_plan
 from .types import Context, ContextUpdateDict, Question
 from .reducer import context_reducer
 from .prompts import Prompts
 from .enums import Node
 import logging
 import json
+import traceback
 
 error_logger = logging.getLogger("uvicorn.error")
 info_logger = logging.getLogger("uvicorn.info")
@@ -54,15 +55,15 @@ class ToolExecutionHandler:
         # execute the tool calls
         for tool_call in tool_calls:
             tool_name = tool_call["name"]
-            args = tool_call["args"]
-            call_id = tool_call["id"]
+            tool_args = tool_call["args"]
+            tool_call_id = tool_call["id"]
 
             # TODO: properly handle this part
-            if tool_name not in self.tools or call_id is None:
+            if tool_name not in self.tools or tool_call_id is None:
                 raise ValueError(f"Tool {tool_name} not found")
             elif tool_name == ask_user.name:
                 # error_logger.error(args)
-                ask_user_call: Question = args
+                ask_user_call: Question = tool_args
                 continue
             # elif tool_name == update_user_info.name:
             #     error_logger.error(args)
@@ -70,7 +71,7 @@ class ToolExecutionHandler:
             #     continue
             elif tool_name == update_context.name:
                 # error_logger.error(args)
-                contexts_update.extend(args.get("updates", []))
+                contexts_update.extend(tool_args.get("updates", []))
                 continue
 
             tool = self.tools[tool_name]
@@ -80,6 +81,15 @@ class ToolExecutionHandler:
                 # error_logger.error(result)
                 
                 artifact: List = result.artifact if result.artifact else []
+
+                # no results for this query.
+                if len(artifact) == 0:
+                    contexts_update.append({
+                        "context_id": tool_call_id,
+                        "new_value": f"No results for tool call {tool_name} with args: {json.dumps(tool_args)}",
+                        "type": "no_result",
+                        "op": "update"
+                    })
 
                 for r in artifact:
                     context_id = ""
@@ -92,6 +102,9 @@ class ToolExecutionHandler:
                     elif tool_name == query_mcgill_knowledges.name:
                         context_id = r.get("id", None)
                         context_type = "general"
+                    elif tool_name == generate_base_plan.name:
+                        context_id = "new_plan"
+                        context_type = "plan"
                     else:
                         raise ValueError("tool name invalid: ", tool_name)
 
@@ -106,11 +119,14 @@ class ToolExecutionHandler:
                     })
                 
             except Exception as e:
+                formatted_traceback = ''.join(traceback.format_exception(type(e), e, e.__traceback__))
+                error_logger.error(formatted_traceback)
+                # error_logger.error(f"Error calling {tool_name} with arguments:\n\n{tool_args}\n\nraised the following error:\n\n{type(e)}: {e}")
                 return Command(
                     update={ "messages": [
-                        ToolMessage(
-                            content=f"Calling {tool_name} with arguments:\n\n{args}\n\nraised the following error:\n\n{type(e)}: {e}",
-                            tool_call_id=call_id
+                        SystemMessage(
+                            content=f"Calling {tool_name} with arguments:\n\n{tool_args}\n\nraised the following error:\n\n{type(e)}: {e}",
+                            tool_call_id=tool_call_id
                             )] 
                         },
                     goto=Node.CONTEXT_MANAGER.value

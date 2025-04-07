@@ -1,5 +1,8 @@
-from .enums import MongoCollection, MongoIndex
+from .enums import MongoCollection, MongoIndex, Faculty, Department, CourseLevel, AcademicLevel
 from typing import Any, Dict, List, Tuple
+import logging
+
+info_logger = logging.getLogger("uvicorn.info")
 
 SEARCH_WEIGHTS = {
         collection: {
@@ -91,3 +94,112 @@ def generate_search_stage(
   elif collection == MongoCollection.Program:
     query_name = query.lower()[:200]+"~2"
     return map_to_search(("name", query_name))
+  
+
+def generate_course_id_pipeline(
+  included_ids: List[str],
+  excluded_ids: List[str] = [],
+  faculties: List[Faculty] = [],
+  departments: List[Department] = [],
+  excluded_levels: List[CourseLevel] = [],
+  included_levels: List[CourseLevel] = [],
+  academic_level: AcademicLevel = AcademicLevel.UGRAD
+):
+
+  filters = []
+  must_not = []
+
+
+  if len(faculties) > 0:
+    filters.append({
+      "in": {
+        "path": "faculty",
+        "value": [f.value for f in faculties]
+      }
+    })
+  if len(departments) > 0:
+    filters.append({
+      "in": {
+        "path": "department",
+        "value": [d.value for d in departments]
+      }
+    })
+  if len(included_levels) > 0:
+    filters.append({
+      "in": {
+        "path": "courseLevel",
+        "value": [l.value for l in included_levels]
+      }
+    })
+  filters.append({
+    "in": {
+      "path": "academicLevel",
+      "value": [0] if academic_level == AcademicLevel.ALL else [0, 1 if academic_level == AcademicLevel.UGRAD else 2]
+    }
+  })
+  
+  if len(excluded_ids) > 0:
+    must_not.append({
+      "text": {
+        "path": "id",
+        "query": excluded_ids
+      }
+    })
+  if len(excluded_levels) > 0:
+    must_not.append({
+      "in": {
+        "path": "courseLevel",
+        "value": [l.value for l in excluded_levels]
+      }
+    })
+  
+  # info_logger.info(f"included_ids: {included_ids}")
+  # info_logger.info(f"filters: {filters}")
+  # info_logger.info(f"must_not: {must_not}")
+  
+  return [
+    {
+      "$search": {
+        "index": "full_text_index",
+        "compound": {
+          "must": [
+            {
+              "text": {
+                "path": "id",
+                "query": included_ids
+              }
+            }
+          ],
+          "mustNot": must_not,
+          "filter": filters
+        }
+      }
+    },
+    {
+      "$addFields": {
+        "nameSubstring": { "$substr": ["$id", 4, -1]}
+      }
+    },
+    {
+      "$sort": {
+        "nameSubstring": 1 # ascending order
+      }
+    },
+    {
+      "$project": {
+        "prerequisites": 1,
+        "corequisites": 1,
+        "restrictions": 1,
+        "futureCourses": 1,
+        "notes": 1,
+        "credits": 1,
+        "name": 1,
+        "id": 1,
+      }
+    },
+    {
+      "$project": {
+        "_id": 0
+      }
+    }
+  ]

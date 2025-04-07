@@ -82,6 +82,13 @@ class MongoDBClient:
             await self._async_client.admin.command('ping')
             # print("Async client created")
         return self._async_client
+    
+    async def get_async_collection(self, collection: MongoCollection):
+        client = await self.get_async_client();
+        db = client[self.database_name];
+        coll = db[collection.value]
+
+        return coll
 
 
     async def ensure_connection(self, async_client: bool = False) -> bool:

@@ -34,7 +34,7 @@ async def handle_chat(request: Request):
         user_input = request.messages[-1] # TODO: user_input validation
 
         agent = await get_agent()
-        config: RunnableConfig = { "configurable": { "thread_id": thread_id, "recursion_limit": 20 } }
+        config: RunnableConfig = { "configurable": { "thread_id": thread_id, "recursion_limit": 25 } }
         state = await agent.aget_state(config=config)
 
         info_logger.info(state)
@@ -68,7 +68,7 @@ async def handle_chat(request: Request):
         async for event in stream:
             # only chat model stream 
 
-            if (event["name"] == Node.INTERACTIVE_QUERY.value): info_logger.info(event)
+            # if (event["name"] == Node.INTERACTIVE_QUERY.value): info_logger.info(event)
             if event["event"] not in ("on_chat_model_stream", "on_chain_start"): continue
 
             # if (event["name"] == Node.PERSONA_RESPONDER.value and event["event"] != "on_chat_model_stream"): continue

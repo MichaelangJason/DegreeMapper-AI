@@ -1,9 +1,14 @@
-from typing import List, Annotated, Dict
+from typing import List, Annotated, Dict, Any
 from langchain_core.tools import BaseTool, tool
-from .types import UserInfo, Term, ContextUpdateDict
 from database.types import Course, Program
 from database.mongodb import MongoDBClient
 from database.enums import AcademicLevel, Faculty, Department, Degree, MongoCollection, CourseLevel
+from database.utils import generate_course_id_pipeline
+from .utils import parse_req
+from .types import ContextUpdateDict, CourseId, Term, Plan
+import logging
+
+info_logger = logging.getLogger("uvicorn.info")
 
 @tool(response_format="content_and_artifact")
 async def search_program(
@@ -88,14 +93,6 @@ async def query_mcgill_knowledges(
   return "query_mcgill results", results;
 
 @tool
-def update_user_info(new_values: UserInfo):
-  """
-  Use this tool to manage (update values) of the user info fields.
-  UserInfo is a json and you can updates it with partial fields. too
-  """
-  return new_values;
-
-@tool
 def update_context(updates: List[ContextUpdateDict]):
   """
   Use this tool to manage the contexts you want to keep.
@@ -116,20 +113,188 @@ def ask_user(
   """
   return question, options;
 
-@tool
-def generate_plan(terms: List[Term]):
+@tool(response_format="content_and_artifact")
+async def generate_base_plan(
+  required_course_ids: Annotated[List[CourseId], "course id to be put in the plan"], 
+  complementary_course_ids: Annotated[List[CourseId], "course id to be put in the plan as complementary courses"],
+  target_credits: Annotated[int, "the total credits required for the program"],
+  faculties: Annotated[List[Faculty], "the faculty of the program(s)"],
+  departments: Annotated[List[Department], "the departments to fetch complementary courses from, must includes the same departments as the program(s)"],
+  per_term_credits: Annotated[int, "An upperbound for each term, represent workloads"] = 15,
+  # complementary course settings
+  course_levels: Annotated[List[CourseLevel], "the course level to fetch complementary courses from, default is emtpy"] = [],
+  academic_level: Annotated[AcademicLevel, "the academic level to fetch complementary courses from, must be set to the same academic level as the program(s)"] = AcademicLevel.UGRAD,
+):
   """
-  Generate a plan. 
-  Include only the terms you want to updtes in order.
+  Given course id, generate a basic plan, you must adjust the basic plan to meets user need.
+  The result is deterministic, meaning same course_ids (provided order does not matter) always return same results based on workload
+  The plan generation considers prerequisites/co-requisites/anti-requisites.
   """
-  return terms;
+
+  # combine required and complementary course ids
+  course_ids = required_course_ids + complementary_course_ids
+  if len(course_ids) == 0:
+    return "plan", [Plan(terms={}, notes={})];
+  # sort by level
+  course_ids = list(map(lambda c: c.lower().replace(" ", ""), course_ids))
+  course_ids = sorted(course_ids, key=lambda id: id[4:])
+
+  # fetch informations
+  coll = await MongoDBClient.get_instance().get_async_collection(MongoCollection.Course)
+  pipeline = generate_course_id_pipeline(course_ids)
+  # info_logger.info(f"pipeline: {pipeline}")
+  results = await coll.aggregate(pipeline=pipeline)
+  results = await results.to_list()
+  courses: List[Course] = [Course(c) for c in results]
+  courses.sort(key=lambda c: c["id"][4:])
+
+  # info_logger.info(f"courseids: {course_ids}")
+  # info_logger.info(f"result courses: {[c['id'] for c in courses]}")
+
+  plan: Plan = {
+    "terms": {
+      "term_1": Term(
+        id="term_1",
+        name="Term 1",
+        course_ids=[],
+        total_credits=0,
+      )
+    },
+    "notes": {},
+    "total_credits": 0
+  }
+
+  terms = plan["terms"]
+  notes = plan["notes"]
+
+  # verify if any missing course ids
+  fetched_course_ids: List[str] = list(map(lambda c: c["id"], courses))
+  if len(fetched_course_ids) != len(course_ids):
+    diff = [id for id in course_ids if id not in fetched_course_ids]
+    notes.update({ "invalid_course_ids": diff })
+
+  added_additional_courses = False
+  possible_future_courses: List[CourseId] = []
+  planned_courses: List[CourseId] = []
+
+  while len(courses) > 0:
+    course = courses.pop(0)
+    prereq_ids, _ = parse_req(course["prerequisites"])
+    coreq_ids, _ = parse_req(course["corequisites"])
+    antireq_ids, _ = parse_req(course["restrictions"])
+
+
+
+    # info_logger.info(f"current course: {course['id']}")
+    # info_logger.info(f"prereq_ids: {prereq_ids}")
+    # info_logger.info(f"coreq_ids: {coreq_ids}")
+    # info_logger.info(f"antireq_ids: {antireq_ids}")
+    # subject_code = course["id"][:4]
+
+    # find the first term after any prereq and before any antireq that:
+    # 1. has enough credits
+    # 2. preferred if has a coreq
+
+    planned = False
+    # find the first term that has enough credits
+    first_possible_term = None
+    possible_term_with_coreq = None
+    plannable = True
+
+    # first verify if any antireq exists in any term
+    # this means we cannot plan this course in any term
+    for term in terms.values():
+      if any(antireq_id in term["course_ids"] for antireq_id in antireq_ids):
+        notes.update({ "unplannable_course": notes.get("unplannable_course", {}) })
+        notes["unplannable_course"][course["id"]] = "antireq not met: " + ", ".join(antireq_ids)
+        plannable = False
+        break
+
+    # info_logger.info(f"plannable: {plannable}")
+    last_prereq_term_idx = 0
+    for i, term in enumerate(reversed(list(terms.values()))):
+      if any(prereq_id in term["course_ids"] for prereq_id in prereq_ids):
+        last_prereq_term_idx = len(terms) - 1 - i
+        break
+
+    # info_logger.info(f"last_prereq_term_idx: {last_prereq_term_idx}")
+
+    if not plannable:
+      continue
+
+    for term in list(terms.values())[last_prereq_term_idx:]: # order guaranteed
+      # check if enough remaining credits
+      if term["total_credits"] + course["credits"] > per_term_credits:
+        continue
+
+      # check if any prereq in this term
+      if any(prereq_id in term["course_ids"] for prereq_id in prereq_ids):
+        continue;
+      
+      # check if any coreq in this term
+      if any(coreq_id in term["course_ids"] for coreq_id in coreq_ids):
+        possible_term_with_coreq = term
+        break
+
+      # can be planned in this term
+      if first_possible_term is None:
+        first_possible_term = term
+    
+    if possible_term_with_coreq is not None:
+      first_possible_term = possible_term_with_coreq
+    
+    if first_possible_term is not None:
+      first_possible_term["course_ids"].append(course["id"])
+      first_possible_term["total_credits"] += course["credits"]
+      plan["total_credits"] += course["credits"]
+      possible_future_courses.extend(course["futureCourses"])
+      planned_courses.append(course["id"])
+      planned = True
+
+    # if not planned, create a new term
+    if not planned:
+      terms.update({
+        f"term_{len(terms) + 1}": Term(
+          id=f"term_{len(terms) + 1}",
+          name=f"Term {len(terms) + 1}",
+          course_ids=[course["id"]],
+          total_credits=course["credits"],
+        )
+      })
+      plan["total_credits"] += course["credits"]
+      possible_future_courses.extend(course["futureCourses"])
+      planned_courses.append(course["id"])
+    
+    if plan["total_credits"] >= target_credits:
+      break
+
+    # add additional complementary courses if not enough credits
+    if len(courses) == 0 and plan["total_credits"] < target_credits and not added_additional_courses:
+      # remove course levels after the level in the last term
+
+      # gather future courses available and filter out by faculty and department
+      results = await coll.aggregate(
+        pipeline=generate_course_id_pipeline(
+          included_ids=possible_future_courses,
+          excluded_ids=planned_courses,
+          faculties=faculties,
+          departments=departments,
+          excluded_levels=[CourseLevel.LEVEL_000, CourseLevel.LEVEL_100],
+          included_levels=course_levels,
+          academic_level=academic_level
+        )
+      )
+      results = await results.to_list()
+      courses: List[Course] = [Course(c) for c in results]
+      courses = list(filter(lambda c: c["credits"] + plan["total_credits"] <= target_credits, courses))
+
+  return "plan", [plan];
 
 tools: List[BaseTool] = [
   search_program,
   search_course,
   query_mcgill_knowledges,
-  # update_user_info,
   update_context,
   ask_user,
-  generate_plan
+  generate_base_plan
 ]

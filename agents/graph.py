@@ -16,8 +16,8 @@ async def get_compiled_graph(model: Model) -> CompiledGraph:
     if model == Model.OPENAI:
         get_llm = get_openai_llm
 
-        ctxmanager_config = { "model": "gpt-4o" }
-        persona_responder_config = { "model": "gpt-4o", "temperature": 0.7 }
+        ctxmanager_config = { "model": "gpt-4o-mini" }
+        persona_responder_config = { "model": "gpt-4o-mini", "temperature": 0.7 }
 
     elif model == Model.DEEPSEEK:
         get_llm = get_deepseek_llm
@@ -54,7 +54,7 @@ async def get_compiled_graph(model: Model) -> CompiledGraph:
     graph.add_edge(Node.INTERACTIVE_QUERY.value, Node.CONTEXT_MANAGER.value)
     graph.add_edge(Node.PERSONA_RESPONDER.value, END)
 
-    compiled_graph = graph.compile(checkpointer=checkpointer, debug=True)
+    compiled_graph = graph.compile(checkpointer=checkpointer, debug=False)
     compiled_graph.get_graph().draw_mermaid_png(output_file_path="graph.png")
 
     return compiled_graph

@@ -68,7 +68,6 @@ class Prompts:
         - Determine whether the existing context and user information are sufficient to address the user's query.
         - If you need any information from user, use ask_user tool for more accurate answer.
         - If you need to update user info about Program, you MUST first use search_program to fetch similar Program and use ask_user with predefined program name as options for accurate info collection.
-        - If you need to generate a plan for terms, you MUST first search all relevant course from database if they are not in the context since you need to know the prerequisites of each course and then give the correct plan, then you MUST use generate_plan for structured output. The plan you generated will be added to context.
         - You need to keep context clean. Delete any non-relevant context before hand them to Jordan.
           - for example, if you query for 'comp400' and received 5 results in contexts, you should remove any redundant context before hand to Jordan.
         - If user ask you to provide any information, you should first consider whether the current context includes the results.
@@ -82,6 +81,18 @@ class Prompts:
         - Assessment: Continuously assess whether the accumulated contexts are sufficient to proceed.
         - Update Management: Perform necessary updates on context and user information to ensure they are current and complete.
         - Decision-Making: Decide if enough information is collected.
+
+        Plan generation/creation task:
+        
+        - plan generation is the most important feature.
+        - here is a typical routine:
+          - you first need to know which program user want to plan.
+          - fetch the program from database using search_program tool.
+          - ask user to provide the program name from the results.
+          - analyze the program information, identify all course ids and credits required.
+          - for complementary courses, if the options are not provided, you should fetch the courses from database that belong to the same faculty of the program.
+          - then you MUST use generate_base_plan to generate a basic plan. Tell Jordan to use it as a basic plan but not the final plan, Jordan should adjust the plan to meet user's need.
+          - the plan you generated will be added to context.
         
         Output Guide:
 
@@ -89,18 +100,18 @@ class Prompts:
         - Example Output:
           - "Contexts are complete. For Jordan, please use contexts (the relevant context_ids) to respond effectively."
         """),
+        MessagesPlaceholder("chat_history"),
         ("system",
          """
           Previous contexts, they can be empty meaning you don't need to verify:
           {contexts}
-         """),
-        MessagesPlaceholder("chat_history")
+         """)
     ]
 
     if made_tool_call:
       messages.extend([
-        SystemMessage(content="Tool calls (include database result) for already made. Do not make more tool calls unless you think the context is not sufficient. If user ask you to search up anything"),
-        SystemMessage(content="Remember you are the assistant of Jordan, you do not directly answer user's question.")
+        SystemMessage(content="Tool calls (include database result) for this query already made. If contexts not updated after the tool call, meaning there is no result. Do not make more tool calls unless you think the context is not sufficient. If you think no more contexts are needed"),
+        SystemMessage(content="Remember you are the assistant of Jordan, you do not directly answer user's question."),
         ])
       
 

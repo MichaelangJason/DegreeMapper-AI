@@ -1,19 +1,9 @@
-from pydantic import BaseModel # not serializable?
-from typing import List, Optional, Dict
+from typing import List, Dict
 from typing_extensions import TypedDict
-from .enums import AcademicLevel, Faculty, Degree, Department
 
-class Prerequisites(TypedDict, total=False):
+class Requisites(TypedDict):
     raw: str
     parsed: str
-
-class Corequisites(TypedDict, total=False):
-    raw: str
-    parsed: str
-
-class Restrictions(TypedDict, total=False):
-    raw: str
-    parsed: str  # restricted taken or taking courses
 
 class Course(TypedDict, total=False):
     id: str
@@ -24,13 +14,13 @@ class Course(TypedDict, total=False):
     academicLevel: int
     courseLevel: str
     terms: List[str]
-    overview: Optional[str] = None
-    instructors: Optional[str] = None
-    notes: Optional[List[str]] = None
-    prerequisites: Optional[Prerequisites] = None
-    corequisites: Optional[Corequisites] = None
-    restrictions: Optional[Restrictions] = None
-    futureCourses: Optional[List[str]] = None
+    overview: str
+    instructors: str
+    notes: List[str]
+    prerequisites: Requisites
+    corequisites: Requisites
+    restrictions: Requisites
+    futureCourses: List[str]
 
     class Config:
         from_attributes = True  # For ORM compatibility
