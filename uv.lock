@@ -181,19 +181,6 @@ wheels = [
 ]
 
 [[package]]
-name = "bitsandbytes"
-version = "0.45.3"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "numpy" },
-    { name = "torch" },
-]
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/20/0f/3a5f062c0ed2252ed128ff028b36d2a46a763a2919b00f12ca5274493ff3/bitsandbytes-0.45.3-py3-none-manylinux_2_24_x86_64.whl", hash = "sha256:720d67ffa8a5c61c958fb62517e8abbb2ab0ac1b33b66506ae911cb34c836c70", size = 76058963 },
-    { url = "https://files.pythonhosted.org/packages/dd/e4/42d721904d5841f029f8af69a8609980fb160cca435cb547eb1780872340/bitsandbytes-0.45.3-py3-none-win_amd64.whl", hash = "sha256:7251d71814a653b2b78b69149f1e88753598688c760c99cbbfb0512ba4ea39c6", size = 75429768 },
-]
-
-[[package]]
 name = "build"
 version = "1.2.2.post1"
 source = { registry = "https://pypi.org/simple" }
@@ -369,7 +356,6 @@ source = { virtual = "." }
 dependencies = [
     { name = "accelerate" },
     { name = "async-lru" },
-    { name = "bitsandbytes" },
     { name = "chromadb" },
     { name = "fastapi", extra = ["standard"] },
     { name = "httpx" },
@@ -408,7 +394,6 @@ dev = [
 requires-dist = [
     { name = "accelerate", specifier = ">=1.4.0" },
     { name = "async-lru", specifier = ">=2.0.4" },
-    { name = "bitsandbytes", specifier = ">=0.37.0" },
     { name = "chromadb", specifier = ">=0.6.3" },
     { name = "fastapi", extras = ["standard"], specifier = ">=0.115.8" },
     { name = "httpx", specifier = ">=0.28.1" },
