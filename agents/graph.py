@@ -55,7 +55,7 @@ async def get_compiled_graph(model: Model) -> CompiledGraph:
     graph.add_edge(Node.PERSONA_RESPONDER.value, END)
 
     compiled_graph = graph.compile(checkpointer=checkpointer, debug=False)
-    compiled_graph.get_graph().draw_mermaid_png(output_file_path="graph.png")
+    # compiled_graph.get_graph().draw_mermaid_png(output_file_path="graph.png")
 
     return compiled_graph
 

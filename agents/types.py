@@ -47,7 +47,7 @@ class Term(TypedDict, total=False):
     # courses: Annotated[List[Course], "Term courses, must exists in database"]
     course_ids: Annotated[List[CourseId], "Term course id, must exists in database"]
     # subject_code_map: Annotated[Dict[str, int], "A map that shows total credits associated to each subject code"]
-    total_credits: Annotated[int, "Total credits for this term"]
+    total_credits: Annotated[float, "Total credits for this term"]
     # all_prerequisites: Annotated[List[CourseId], "prerequisites required for this term"]
     # all_corequisites: Annotated[List[CourseId], "corequisites required for this term"]
     # all_restrictions: Annotated[List[CourseId], "id for course not allowed during or before this term"]
@@ -55,7 +55,7 @@ class Term(TypedDict, total=False):
 class Plan(TypedDict):
     terms: Annotated[Dict[str, Term], "A map of terms, key is the term id"]
     notes: Annotated[Dict[str, Any], "Notes for the plan"]
-    total_credits: Annotated[int, "Total credits for the plan"]
+    total_credits: Annotated[float, "Total credits for the plan"]
 
 class CreditGroup(TypedDict):
     subject_codes: List[str]

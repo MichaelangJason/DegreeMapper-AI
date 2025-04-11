@@ -155,7 +155,7 @@ class InteractiveQuery:
             # return the updates
             return {
                 # "user_info": state.get("user_info", None),
-                "contexts": state.get("contexts_update", {}),
+                "contexts": state.get("contexts_update", []),
                 "contexts_update": None,
             }
         else:
@@ -165,7 +165,7 @@ class InteractiveQuery:
                     update={ 
                         "messages": [ToolMessage(content="Calling ask_user with None Value")],
                         "interrupted": False,
-                        "contexts": state.get("contexts_update", {}),
+                        "contexts": state.get("contexts_update", []),
                         "contexts_update": None
                         # "user_info": state.get("user_info", None)
                     },
@@ -227,7 +227,7 @@ class ContextManager:
             }
         else:
             return {
-                "messages": [response] + ([RemoveMessage(fail_call_id)] if fail_call_id else []),
+                "messages": ([RemoveMessage(fail_call_id)] if fail_call_id else []),
                 "tool_calls": [] # clear tool calls
             }
 
@@ -240,7 +240,7 @@ class PersonaResponder:
 
         llm = self.llm.with_config({ "run_name": Node.PERSONA_RESPONDER.value })
         chat_history = state["messages"]
-        assistant_message: AIMessage = state["messages"][-1]
+        # assistant_message: AIMessage = state["messages"][-1]
         # info_logger.info(assistant_message)
         # info_logger.info(assistant_message.id)
         # info_logger.info(type(assistant_message))
@@ -263,18 +263,15 @@ class PersonaResponder:
         # return {
         #     "messages": [RemoveMessage(id=assistant_message.id), response],
         # }
-        return Command(
-            update={
-                "messages": [RemoveMessage(id=assistant_message.id), response],
+        return {
+                "messages": [response],
                 "contexts": [{
                     "context_id": None,
                     "new_value": None,
                     "type": None,
                     "op": "clear"
                 }]
-            },
-            goto=END
-        )
+            }
 
 
 __all__ = [

@@ -37,7 +37,7 @@ async def handle_chat(request: Request):
         config: RunnableConfig = { "configurable": { "thread_id": thread_id, "recursion_limit": 25 } }
         state = await agent.aget_state(config=config)
 
-        info_logger.info(state)
+        # info_logger.info(state)
         
         # resume if interrupted for human input
         should_resume = state.values.get("interrupted", False)
@@ -67,6 +67,9 @@ async def handle_chat(request: Request):
 
         async for event in stream:
             # only chat model stream 
+            if event["name"] != Node.PERSONA_RESPONDER.value and event["name"] != Node.INTERACTIVE_QUERY.value:
+                info_logger.info(event)
+                continue
 
             # if (event["name"] == Node.INTERACTIVE_QUERY.value): info_logger.info(event)
             if event["event"] not in ("on_chat_model_stream", "on_chain_start"): continue
@@ -96,10 +99,11 @@ async def handle_chat(request: Request):
             # print(event)
             # print(chunk)
             # print(content)
-            
+            single_quote = "@@SINGLEQUOTE@@"
+            double_quote = "@@DOUBLEQUOTE@@"
             result = {
                 "data": {
-                    "content": content,
+                    "content": content.replace("'", single_quote).replace('"', double_quote),
                     "metadata": {
                         "thread_id": thread_id
                     }
@@ -109,6 +113,10 @@ async def handle_chat(request: Request):
 
             yield result
 
+        yield {
+            "data": "[DONE]",
+            "event": "end_of_stream"
+        }
 
         # results = agent.astream(
         #     {"messages": [HumanMessage(content=user_input)]}, 
@@ -135,8 +143,8 @@ async def get_chat(thread_id: str):
 
         return Response(status_code=status.HTTP_404_NOT_FOUND)
     
-    info_logger.info(f"Messages in the thread {thread_id}: {results.values['messages']}")
-    info_logger.info(f"Thread id: {results.config}")
+    # info_logger.info(f"Messages in the thread {thread_id}: {results.values['messages']}")
+    # info_logger.info(f"Thread id: {results.config}")
     response = {
         "messages": [{"role": msg.type, "content": msg.content} for msg in results.values.get("messages") if msg.type != "tool"],
         "thread_id": results.config.get("configurable").get("thread_id")

@@ -1,4 +1,4 @@
-from typing import Dict, Any, List
+from typing import List
 from .types import UserInfo, Context, ContextUpdateDict
 import logging
 
@@ -17,7 +17,7 @@ def context_reducer(prev: Context, update: List[ContextUpdateDict]) -> Context:
     if update == []:
         return prev
     
-    error_logger.error(update)
+    # error_logger.error(update)
     
     next = {**prev}
     for item in update:

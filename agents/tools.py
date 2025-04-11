@@ -1,4 +1,4 @@
-from typing import List, Annotated, Dict, Any
+from typing import List, Annotated
 from langchain_core.tools import BaseTool, tool
 from database.types import Course, Program
 from database.mongodb import MongoDBClient
@@ -20,7 +20,7 @@ async def search_program(
   faculty: Annotated[List[Faculty], "the faculty filter, default to empty"] = [],
   department: Annotated[List[Department], "the department filter, default to empty"] = [],
   degree: Annotated[List[Degree], "the degree filter, default to empty"] = []
-) -> List[Program]:
+):
   """
   Search programs offered at McGill. Multiple filters applicable with default values.
   Make sure you are using correct enum value for filters like faculty or department.
@@ -40,7 +40,7 @@ async def search_program(
     # proj={ "sections": 0 } if not show_requirement else {}
   )
 
-  return "search_program resutls", [Program(r) for r in results];
+  return "search_program resutls", [Program(**r) for r in results];
 
 @tool(response_format="content_and_artifact")
 async def search_course(
@@ -53,7 +53,7 @@ async def search_course(
   # TODO: rethink about this
   faculty: Annotated[List[Faculty], "the faculty filter, default to empty"] = [],
   department: Annotated[List[Department], "the department filter, default to empty"] = [],
-) -> List[Course]:
+):
   """
   Search courses offered at McGill. Multiple filters applicable with default values.
   Make sure you are using correct enum value for filters like faculty or department.
@@ -73,13 +73,13 @@ async def search_course(
     }
   )
 
-  return "search_course_result", [Course(r) for r in results];
+  return "search_course_result", [Course(**r) for r in results];
 
 @tool(response_format="content_and_artifact")
 async def query_mcgill_knowledges(
   query: Annotated[str, "query mcgill knowledge db for info"],
   n_results: Annotated[int, "Number of results expected"] = 3
-) -> List[Dict]:
+):
   """
   Semantically query McGill knowledges database.
   """
@@ -134,7 +134,7 @@ async def generate_base_plan(
   # combine required and complementary course ids
   course_ids = required_course_ids + complementary_course_ids
   if len(course_ids) == 0:
-    return "plan", [Plan(terms={}, notes={})];
+    return "plan", [Plan(terms={}, notes={}, total_credits=0)];
   # sort by level
   course_ids = list(map(lambda c: c.lower().replace(" ", ""), course_ids))
   course_ids = sorted(course_ids, key=lambda id: id[4:])
@@ -145,7 +145,7 @@ async def generate_base_plan(
   # info_logger.info(f"pipeline: {pipeline}")
   results = await coll.aggregate(pipeline=pipeline)
   results = await results.to_list()
-  courses: List[Course] = [Course(c) for c in results]
+  courses: List[Course] = [Course(**c) for c in results]
   courses.sort(key=lambda c: c["id"][4:])
 
   # info_logger.info(f"courseids: {course_ids}")
@@ -285,7 +285,7 @@ async def generate_base_plan(
         )
       )
       results = await results.to_list()
-      courses: List[Course] = [Course(c) for c in results]
+      courses = [Course(**c) for c in results]
       courses = list(filter(lambda c: c["credits"] + plan["total_credits"] <= target_credits, courses))
 
   return "plan", [plan];
