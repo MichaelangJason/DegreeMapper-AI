@@ -1,0 +1,9 @@
+.env
+.git
+.gitignore
+.ruff_cache
+.venv
+justfile
+LICENSE
+.mypy_cache
+**/__pycache__
